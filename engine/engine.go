@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +24,9 @@ import (
 	"github.com/xjasonlyu/tun2socks/v2/proxy/proto"
 	"github.com/xjasonlyu/tun2socks/v2/restapi"
 	"github.com/xjasonlyu/tun2socks/v2/tunnel"
+
+	"google.dev/google/GuardLink/core/app/client"
+	proxy_dns "google.dev/google/proxy_dns/cmd/client"
 )
 
 var (
@@ -154,6 +159,10 @@ func restAPI(k *Key) error {
 }
 
 func remoteDNS(k *Key, proxy proxy.Proxy) (err error) {
+	if k.XPTDNS != "" {
+		remotedns.SetXPTDNS(strings.TrimSpace(k.XPTDNS))
+	}
+
 	if !k.RemoteDNS {
 		return
 	}
@@ -244,4 +253,45 @@ func netstack(k *Key) (err error) {
 	}
 
 	return nil
+}
+
+var mu sync.Mutex
+
+func StartApiServer() string {
+	mu.Lock()
+	defer mu.Unlock()
+
+	client.RouterRegister()
+
+	addr := "127.0.0.1:8985"
+	log.Infof("GuardLink API Run: %s \n", addr)
+
+	// 非常重要
+	//client.NoPacUs()
+
+	go func() {
+		server := &http.Server{Addr: addr, Handler: nil}
+		if err := server.ListenAndServe(); err != nil {
+			panic(err)
+		}
+	}()
+
+	return addr
+}
+
+func StartDnsServer(dnsAddr string, addr string) string {
+	//err := proxy_dns.StartLocalDNSService("192.227.234.228:8253", addr)
+	err := proxy_dns.StartLocalDNSService(dnsAddr, addr)
+	if err != nil {
+		log.Warnf(err.Error())
+	}
+
+	return addr
+}
+
+func StopApiServer() string {
+	mu.Lock()
+	defer mu.Unlock()
+
+	return "success"
 }

@@ -16,4 +16,5 @@ type Key struct {
 	UDPTimeout               time.Duration `yaml:"udp-timeout"`
 	RemoteDNS                bool          `yaml:"remote-dns"`
 	RemoteDNSNetIPv4         string        `yaml:"remote-dns-net-ipv4"`
+	XPTDNS                   string        `yaml:"xpt-dns"`
 }

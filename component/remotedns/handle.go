@@ -1,16 +1,14 @@
 package remotedns
 
 import (
-	"net"
-
 	"github.com/miekg/dns"
+	"github.com/xjasonlyu/tun2socks/v2/log"
+	M "github.com/xjasonlyu/tun2socks/v2/metadata"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/waiter"
-
-	"github.com/xjasonlyu/tun2socks/v2/log"
-	M "github.com/xjasonlyu/tun2socks/v2/metadata"
+	"net"
 )
 
 func RewriteMetadata(metadata *M.Metadata) bool {
@@ -28,7 +26,12 @@ func RewriteMetadata(metadata *M.Metadata) bool {
 }
 
 func HandleDNSQuery(s *stack.Stack, id stack.TransportEndpointID, ptr stack.PacketBufferPtr) bool {
-	if !IsEnabled() {
+	//log.Infof("HandleDNSQuery ........")
+	//if !IsEnabled() {
+	//	return false
+	//}
+
+	if XPTDNS() == "" {
 		return false
 	}
 
@@ -36,38 +39,48 @@ func HandleDNSQuery(s *stack.Stack, id stack.TransportEndpointID, ptr stack.Pack
 	err := msg.Unpack(ptr.Data().AsRange().ToSlice())
 
 	// Ignore UDP packets that are not IP queries to a recursive resolver
-	if id.LocalPort != 53 || err != nil || len(msg.Question) != 1 || msg.Question[0].Qtype != dns.TypeA &&
-		msg.Question[0].Qtype != dns.TypeAAAA || msg.Question[0].Qclass != dns.ClassINET || !msg.RecursionDesired ||
-		msg.Response {
+	//if id.LocalPort != 53 || err != nil || len(msg.Question) != 1 || msg.Question[0].Qtype != dns.TypeA &&
+	//	msg.Question[0].Qtype != dns.TypeAAAA || msg.Question[0].Qclass != dns.ClassINET || !msg.RecursionDesired ||
+	//	msg.Response {
+	//	return false
+	//}
+
+	if id.LocalPort != 53 || err != nil {
 		return false
 	}
 
-	qname := msg.Question[0].Name
-	qtype := msg.Question[0].Qtype
-
-	log.Infof("[DNS] query %s %s", dns.TypeToString[qtype], qname)
-
-	msg.RecursionDesired = false
-	msg.RecursionAvailable = true
-	var ip net.IP
-	if qtype == dns.TypeA {
-		rr := dns.A{}
-		ip = insertNameIntoCache(4, qname)
-		if ip == nil {
-			log.Warnf("[DNS] IP space exhausted")
-			return true
-		}
-		rr.A = ip
-		rr.Hdr.Name = qname
-		rr.Hdr.Ttl = ttl
-		rr.Hdr.Class = dns.ClassINET
-		rr.Hdr.Rrtype = qtype
-		msg.Answer = append(msg.Answer, &rr)
+	d, err := lookup(XPTDNS(), &msg)
+	if err != nil {
+		log.Infof("lookup error: %s", err)
+		return false
 	}
 
-	msg.Response = true
-	msg.RecursionAvailable = true
-
+	//qname := msg.Question[0].Name
+	//qtype := msg.Question[0].Qtype
+	//
+	//log.Infof("[DNS] query %s %s", dns.TypeToString[qtype], qname)
+	//
+	//msg.RecursionDesired = false
+	//msg.RecursionAvailable = true
+	//var ip net.IP
+	//if qtype == dns.TypeA {
+	//	rr := dns.A{}
+	//	ip = insertNameIntoCache(4, qname)
+	//	if ip == nil {
+	//		log.Warnf("[DNS] IP space exhausted")
+	//		return true
+	//	}
+	//	rr.A = ip
+	//	rr.Hdr.Name = qname
+	//	rr.Hdr.Ttl = ttl
+	//	rr.Hdr.Class = dns.ClassINET
+	//	rr.Hdr.Rrtype = qtype
+	//	msg.Answer = append(msg.Answer, &rr)
+	//}
+	//
+	//msg.Response = true
+	//msg.RecursionAvailable = true
+	//
 	var wq waiter.Queue
 
 	ep, err2 := s.NewEndpoint(ptr.TransportProtocolNumber, ptr.NetworkProtocolNumber, &wq)
@@ -79,7 +92,7 @@ func HandleDNSQuery(s *stack.Stack, id stack.TransportEndpointID, ptr stack.Pack
 	ep.Bind(tcpip.FullAddress{NIC: ptr.NICID, Addr: id.LocalAddress, Port: id.LocalPort})
 	conn := gonet.NewUDPConn(s, &wq, ep)
 	defer conn.Close()
-	packed, err := msg.Pack()
+	packed, err := d.Pack()
 	if err != nil {
 		return true
 	}

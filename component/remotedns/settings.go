@@ -19,7 +19,17 @@ var (
 	ip4net              *net.IPNet
 	ip4NextAddress      net.IP
 	ip4BroadcastAddress net.IP
+
+	xptDNS string
 )
+
+func SetXPTDNS(dns string) {
+	xptDNS = dns
+}
+
+func XPTDNS() string {
+	return xptDNS
+}
 
 func IsEnabled() bool {
 	return enabled

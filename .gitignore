@@ -12,3 +12,7 @@ build/
 
 # Misc
 .DS_Store
+
+
+tun2socks-sources.jar
+tun2socks.aar

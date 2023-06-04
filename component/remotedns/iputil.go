@@ -1,6 +1,9 @@
 package remotedns
 
-import "net"
+import (
+	"github.com/miekg/dns"
+	"net"
+)
 
 func copyIP(ip net.IP) net.IP {
 	dup := make(net.IP, len(ip))
@@ -33,4 +36,16 @@ func getNetworkAddress(ipnet *net.IPNet) net.IP {
 		result[i] &= ipnet.Mask[i]
 	}
 	return result
+}
+
+func lookup(server string, m *dns.Msg) (*dns.Msg, error) {
+	dnsClient := new(dns.Client)
+	dnsClient.Net = "udp"
+
+	response, _, err := dnsClient.Exchange(m, server)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
